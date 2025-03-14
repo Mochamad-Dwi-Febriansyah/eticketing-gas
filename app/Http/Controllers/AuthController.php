@@ -21,13 +21,11 @@ class AuthController extends Controller
             'password' => 'required|string|min:6|confirmed',
             'nik' => 'required|string|size:16|unique:users,nik',
             'kk' => 'required|string|size:16|unique:users,kk',
-            'phone' => 'required|string|max:20|unique:users,phone',
-            'role' => 'required|in:super_admin,admin_cabang,user',
+            'phone' => 'required|string|max:20|unique:users,phone', 
             'branch_id' => 'nullable|exists:branches,id',
             'street_address' => 'nullable|string|max:255',
             'subdistrict' => 'nullable|string|max:255',
-            'district' => 'nullable|string|max:255',
-            'city' => 'nullable|string|max:255',
+            'district' => 'nullable|string|max:255', 
             'province' => 'nullable|string|max:255',
             'village' => 'nullable|string|max:255',
             'postal_code' => 'nullable|string|max:10',
@@ -37,7 +35,7 @@ class AuthController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Validation errors',
-                'result' => $validator->errors()
+                'errors' => $validator->errors()
             ], 422);
         }
 
@@ -46,18 +44,16 @@ class AuthController extends Controller
         $otp_expires_at = Carbon::now()->addMinutes(10);
 
         $user = User::create([ 
+            'branch_id' => $request->branch_id,
             'name' => $request->name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
             'nik' => $request->nik,
             'kk' => $request->kk,
-            'phone' => $request->phone,
-            'role' => $request->role,
-            'branch_id' => $request->branch_id,
+            'phone' => $request->phone,  
             'street_address' => $request->street_address,
             'subdistrict' => $request->subdistrict,
-            'district' => $request->district,
-            'city' => $request->city,
+            'district' => $request->district, 
             'province' => $request->province,
             'village' => $request->village,
             'postal_code' => $request->postal_code,
@@ -83,7 +79,7 @@ class AuthController extends Controller
     public function verifyOtp(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'phone' => 'required|string|max:20|exists:users,phone',
+            'nik' => 'required|string|size:16|exists:users,nik',
             'otp' => 'required|string|size:6'
         ]);
 
@@ -91,17 +87,17 @@ class AuthController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Validation errors',
-                'result' => $validator->errors()
+                'errors' => $validator->errors()
             ], 422);
         }
 
-        $user = User::where('phone', $request->phone)->first();
+        $user = User::where('nik', $request->nik)->first();
 
         if (!$user || $user->otp !== $request->otp) {
             return response()->json([
                 'success' => false,
                 'message' => 'Invalid OTP',
-                'result' => null
+                'errors' => null
             ], 401);
         }
 
@@ -109,7 +105,7 @@ class AuthController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'OTP expired',
-                'result' => null
+                'errors' => null
             ], 401);
         }
 
@@ -131,47 +127,60 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'phone' => 'required|string|max:20|exists:users,phone',
+            'nik' => 'required|string|max:16',
             'password' => 'required|string|min:6',
         ]);
-
+    
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Validation errors',
-                'result' => $validator->errors()
+                'errors' => $validator->errors()
             ], 422);
         }
-
-        $user = User::where('phone', $request->phone)->first();
-
-        if (!$user || !Hash::check($request->password, $user->password)) {
+    
+        try {
+            // Cari user berdasarkan NIK
+            $user = User::where('nik', $request->nik)->firstOrFail();
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Invalid phone number or password',
-                'result' => null
+                'message' => 'User not found',
+                'errors' => null
+            ], 404);
+        }
+    
+        // Periksa password
+        if (!Hash::check($request->password, $user->password)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid NIK or password',
+                'errors' => null
             ], 401);
         }
-
+    
+        // Periksa apakah user sudah aktif
         if (!$user->is_active) {
             return response()->json([
                 'success' => false,
                 'message' => 'User not verified. Please enter OTP',
-                'result' => null
+                'errors' => null
             ], 403);
         }
-
+    
+        // Generate JWT Token
         $token = JWTAuth::fromUser($user);
-
+    
         return response()->json([
             'success' => true,
             'message' => 'Login successful',
             'result' => [
                 'token' => $token,
-                // 'user' => $user
+                'user' => $user // Bisa dikembalikan jika diperlukan
             ]
         ]);
     }
+    
 
     // Logout
     public function logout()

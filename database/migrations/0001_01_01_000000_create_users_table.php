@@ -25,7 +25,7 @@ return new class extends Migration
             $table->string('street_address'); 
             $table->string('village'); 
             $table->string('district'); 
-            $table->string('city'); 
+            $table->string('subdistrict');  
             $table->string('province'); 
             $table->string('postal_code', 10); 
         

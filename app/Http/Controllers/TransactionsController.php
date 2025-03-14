@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Order;
 use App\Models\Transactions;
+use App\Services\MidtransService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -11,6 +12,12 @@ use Illuminate\Support\Facades\Validator;
 
 class TransactionsController extends Controller
 {
+    protected $midtrans;
+
+    public function __construct(MidtransService $midtrans)
+    {
+        $this->midtrans = $midtrans;
+    }
      // Get all transactions
      public function index()
      {
@@ -45,23 +52,67 @@ class TransactionsController extends Controller
      // Store a new transaction
      public function store(Request $request)
      {
-        $validator = Validator::make($request->all(), [
+         $validator = Validator::make($request->all(), [
              'order_id' => 'required|exists:orders,id',
              'user_id' => 'required|exists:users,id',
-             'payment_method' => 'required|in:cash,bank_transfer,ewallet',
+             'payment_method' => 'required|in:cash,bank_transfer,ewallet,midtrans',
              'amount_paid' => 'required|numeric|min:0',
          ]);
+ 
          if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation errors',
-                'result' => $validator->errors()
-            ], 422);
-        }
+             return response()->json([
+                 'success' => false,
+                 'message' => 'Validation errors',
+                 'result' => $validator->errors()
+             ], 422);
+         }
  
          $order = Order::findOrFail($request->order_id);
  
-         // Cek apakah jumlah pembayaran sesuai dengan total harga pesanan
+         // Jika metode Midtrans, generate Snap Token
+         if ($request->payment_method === 'midtrans') {
+             $order_id = 'ORDER-' . $order->id . '-' . time();
+ 
+             $transactionDetails = [
+                 'transaction_details' => [
+                     'order_id' => $order_id,
+                     'gross_amount' => $order->total_price,
+                 ],
+                 'item_details' => [
+                     [
+                         'id' => $order->id,
+                         'price' => $order->total_price,
+                         'quantity' => 1,
+                         'name' => 'Gas Purchase Order',
+                     ],
+                 ],
+                 'customer_details' => [
+                     'first_name' => 'Customer', // Optional: bisa dinamis
+                     'email' => 'customer@mail.com', // Optional: bisa dinamis
+                 ],
+             ];
+ 
+             $snapToken = $this->midtrans->createTransaction($transactionDetails);
+ 
+             // Simpan transaksi dengan status pending dulu
+             $transaction = Transactions::create([
+                 'order_id' => $order->id,
+                 'user_id' => $request->user_id,
+                 'payment_method' => 'midtrans',
+                 'status' => 'pending', // Karena belum dibayar
+                 'amount_paid' => $order->total_price,
+                 'midtrans_order_id' => $order_id, // Simpan order id midtrans
+             ]);
+ 
+             return response()->json([
+                 'success' => true,
+                 'message' => 'Midtrans transaction initiated',
+                 'snap_token' => $snapToken,
+                 'transaction' => $transaction,
+             ]);
+         }
+ 
+         // Jika pembayaran langsung (cash, manual transfer, ewallet lokal)
          if ($request->amount_paid < $order->total_price) {
              return response()->json([
                  'success' => false,
@@ -79,7 +130,6 @@ class TransactionsController extends Controller
                  'amount_paid' => $request->amount_paid,
              ]);
  
-             // Update status order menjadi completed jika transaksi sukses
              $order->update(['status' => 'completed']);
  
              DB::commit();

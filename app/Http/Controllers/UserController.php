@@ -170,7 +170,7 @@ class UserController extends Controller
         ], 403);
     }
 
-    $users = User::where('branch_id', $user->branch_id)->get();
+    $users = User::where('branch_id', $user->branch_id)->where('role','user')->get();
 
     return response()->json([
         'success' => true,

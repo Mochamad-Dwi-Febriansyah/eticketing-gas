@@ -37,7 +37,9 @@ class BranchController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
-            'address' => 'required|string|max:255',
+            'code' => 'required',
+            'phone' => 'required',
+            'street_address' => 'required|string|max:255',
             'village' => 'required|string|max:255',
             'district' => 'required|string|max:255',
             'city' => 'required|string|max:255',
@@ -55,7 +57,9 @@ class BranchController extends Controller
 
         $branch = Branch::create([ 
             'name' => $request->name,
-            'address' => $request->address,
+            'code' => $request->code,
+            'phone' => $request->phone,
+            'street_address' => $request->street_address,
             'village' => $request->village,
             'district' => $request->district,
             'city' => $request->city,
@@ -78,7 +82,9 @@ class BranchController extends Controller
 
         $validator = Validator::make($request->all(), [
             'name' => 'sometimes|string|max:255',
-            'address' => 'sometimes|string|max:255',
+            'code' => 'required',
+            'phone' => 'required',
+            'street_address' => 'sometimes|string|max:255',
             'village' => 'sometimes|string|max:255',
             'district' => 'sometimes|string|max:255',
             'city' => 'sometimes|string|max:255',

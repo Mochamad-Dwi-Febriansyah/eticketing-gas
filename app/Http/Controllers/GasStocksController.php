@@ -34,33 +34,53 @@ class GasStocksController extends Controller
     }
 
     // Create new gas stock
-    public function store(Request $request)
-    {
-        $validator = Validator::make($request->all(), [
-            'branch_id' => 'required|exists:branches,id',
-            'gas_type' => 'required|in:3kg,5kg,12kg', // Hanya menerima nilai dari ENUM
-            'stock' => 'required|integer|min:1',
-        ]);
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation errors',
-                'result' => $validator->errors()
-            ], 422);
-        }
+   // Create new gas stock (auto add if exists)
+public function store(Request $request)
+{
+    $validator = Validator::make($request->all(), [
+        'branch_id' => 'required|exists:branches,id',
+        'gas_type' => 'required|in:3kg,5kg,12kg',
+        'stock' => 'required|integer|min:1',
+    ]);
+    if ($validator->fails()) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Validation errors',
+            'result' => $validator->errors()
+        ], 422);
+    }
 
-        $gasStock = GasStocks::create([ 
-            'branch_id' => $request->branch_id,
-            'gas_type' => $request->gas_type,
-            'stock' => $request->stock,
-        ]);
+    // Cek apakah stok untuk branch_id dan gas_type ini sudah ada
+    $existingStock = GasStocks::where('branch_id', $request->branch_id)
+        ->where('gas_type', $request->gas_type)
+        ->first();
+
+    if ($existingStock) {
+        // Jika ada, tambahkan stok
+        $existingStock->stock += $request->stock;
+        $existingStock->save();
 
         return response()->json([
             'success' => true,
-            'message' => 'Gas stock added successfully',
-            'result' => $gasStock
-        ], 201);
+            'message' => 'Gas stock updated successfully (added to existing)',
+            'result' => $existingStock
+        ], 200);
     }
+
+    // Jika tidak ada, buat stok baru
+    $gasStock = GasStocks::create([
+        'branch_id' => $request->branch_id,
+        'gas_type' => $request->gas_type,
+        'stock' => $request->stock,
+    ]);
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Gas stock added successfully',
+        'result' => $gasStock
+    ], 201);
+}
+
 
     public function update(Request $request, $id)
     {

@@ -3,6 +3,7 @@
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BranchController;
 use App\Http\Controllers\GasStocksController;
+use App\Http\Controllers\MidtransWebhookController;
 use App\Http\Controllers\OrdersController;
 use App\Http\Controllers\TransactionsController;
 use App\Http\Controllers\UserController;
@@ -16,6 +17,8 @@ Route::prefix('v1')->group(function () {
         Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
         Route::post('/login', [AuthController::class, 'login']);
     });
+    Route::get('/branches', [BranchController::class, 'index']);
+    Route::post('/midtrans/webhook', [MidtransWebhookController::class, 'handle']);
     Route::middleware(['checkToken'])->group(function () {
         Route::prefix('auth')->group(function () {  
             Route::post('/logout', [AuthController::class, 'logout']);
@@ -28,7 +31,7 @@ Route::prefix('v1')->group(function () {
             Route::delete('/users/{id}', [UserController::class, 'destroy']);
             Route::post('/users/restore/{id}', [UserController::class, 'restore']);
 
-            Route::get('/branches', [BranchController::class, 'index']);
+            // Route::get('/branches', [BranchController::class, 'index']);
             Route::get('/branches/{id}', [BranchController::class, 'show']);
             Route::post('/branches', [BranchController::class, 'store']);
             Route::put('/branches/{id}', [BranchController::class, 'update']);
@@ -72,6 +75,8 @@ Route::prefix('v1')->group(function () {
         });
 
         Route::middleware(['role:user'])->group(function () {
+            Route::get('/gas-stocks-by-branch-user', [GasStocksController::class, 'indexByBranch']);
+
             Route::post('/orders-by-user', [OrdersController::class, 'storeByUser']); 
             Route::get('/orders-by-user', [OrdersController::class, 'indexByUser']); 
             Route::get('/orders-by-user/{id}', [OrdersController::class, 'showByUser']); 

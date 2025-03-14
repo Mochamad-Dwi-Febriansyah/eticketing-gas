@@ -18,7 +18,9 @@ return new class extends Migration
             $table->enum('payment_method', ['cash', 'bank_transfer', 'ewallet']);
             $table->enum('status', ['pending', 'paid', 'failed'])->default('pending');
             $table->decimal('amount_paid', 10, 2);
+            $table->string('midtrans_order_id')->nullable()->unique(); // Untuk simpan order id Midtrans
             $table->timestamps();
+            $table->softDeletes();
         });
     }
 

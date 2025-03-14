@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\GasStocks;
 use App\Models\Order;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -43,6 +44,13 @@ class OrdersController extends Controller
         DB::beginTransaction();
 
         try {
+
+            $validated = $validator->validated();
+
+            // ✅ Parse ISO date to MySQL datetime format
+            if (!empty($validated['pickup_date'])) {
+                $validated['pickup_date'] = Carbon::parse($validated['pickup_date'])->format('Y-m-d H:i:s');
+            }
             // Cek stok gas di cabang
             $gasStock = GasStocks::where('branch_id', $request->branch_id)
                 ->where('gas_type', $request->gas_type)
@@ -57,16 +65,16 @@ class OrdersController extends Controller
 
             // Kurangi stok gas
             $gasStock->decrement('stock', $request->quantity);
-
+            $order = \App\Models\Order::create($validated);
             // Buat order baru
-            $order = Order::create([ 
-                'user_id' => $request->user_id,
-                'branch_id' => $request->branch_id,
-                'status' => 'pending',
-                'quantity' => $request->quantity,
-                'total_price' => $request->total_price,
-                'pickup_date' => $request->pickup_date,
-            ]);
+            // $order = Order::create([ 
+            //     'user_id' => $request->user_id,
+            //     'branch_id' => $request->branch_id,
+            //     'status' => 'pending',
+            //     'quantity' => $request->quantity,
+            //     'total_price' => $request->total_price,
+            //     'pickup_date' => $request->pickup_date,
+            // ]);
 
             DB::commit();
 
@@ -105,6 +113,13 @@ class OrdersController extends Controller
             'status' => 'sometimes|in:pending,approved,rejected,completed',
             'pickup_date' => 'nullable|date|after:today',
         ]);
+ 
+        $validated = $validator->validated();
+
+        // ✅ Parse ISO date to MySQL datetime format
+        if (!empty($validated['pickup_date'])) {
+            $validated['pickup_date'] = Carbon::parse($validated['pickup_date'])->format('Y-m-d H:i:s');
+        }
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
@@ -196,6 +211,7 @@ class OrdersController extends Controller
                     'result' => $validator->errors()
                 ], 422);
             }
+            $total_price = $request->quantity * $request->price;
     
             $order = Order::create([
                 'user_id' => $user->id,
@@ -205,12 +221,33 @@ class OrdersController extends Controller
                 'total_price' => $request->quantity * 20000, // Contoh harga per tabung
                 'pickup_date' => null,
             ]);
+
+            // Midtrans Config
+    \Midtrans\Config::$serverKey = env('MIDTRANS_SERVER_KEY');
+    \Midtrans\Config::$isProduction = false;
+    \Midtrans\Config::$isSanitized = true;
+    \Midtrans\Config::$is3ds = true;
+
+    // Midtrans Params
+    $params = [
+        'transaction_details' => [
+            'order_id' => 'ORDER-' . $order->id,
+            'gross_amount' => $total_price,
+        ],
+        'customer_details' => [
+            'first_name' => $user->name,
+            'email' => $user->email,
+        ],
+    ];
+
+    $snapToken = \Midtrans\Snap::getSnapToken($params);
     
-            return response()->json([
-                'success' => true,
-                'message' => 'Order placed successfully',
-                'result' => $order
-            ], 201);
+    return response()->json([
+        'success' => true,
+        'message' => 'Order placed successfully',
+        'snap_token' => $snapToken,
+        'result' => $order
+    ], 201);
         }
     
         // 🔹 User melihat semua pesanan mereka
