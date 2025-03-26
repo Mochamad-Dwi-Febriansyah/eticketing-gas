@@ -15,7 +15,7 @@ return new class extends Migration
             $table->uuid('id')->primary();
             $table->foreignUuid('order_id')->constrained('orders')->cascadeOnDelete();
             $table->foreignUuid('user_id')->constrained('users')->cascadeOnDelete();
-            $table->enum('payment_method', ['cash', 'bank_transfer', 'ewallet']);
+            $table->enum('payment_method', ['cash', 'bank_transfer', 'ewallet','midtrans']);
             $table->enum('status', ['pending', 'paid', 'failed'])->default('pending');
             $table->decimal('amount_paid', 10, 2);
             $table->string('midtrans_order_id')->nullable()->unique(); // Untuk simpan order id Midtrans

@@ -19,6 +19,7 @@ return new class extends Migration
             $table->integer('quantity'); 
             $table->decimal('total_price', 10, 2);
             $table->timestamp('pickup_date')->nullable(); 
+            $table->string('midtrans_order_id')->nullable()->unique();
             $table->timestamps();
             $table->softDeletes();
         });

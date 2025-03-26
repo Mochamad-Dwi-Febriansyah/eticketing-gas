@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\GasStocks;
 use App\Models\Order;
+use App\Models\Transactions;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -199,7 +200,7 @@ class OrdersController extends Controller
         public function storeByUser(Request $request)
         {
             $user = Auth::user();
-    
+        
             $validator = Validator::make($request->all(), [
                 'branch_id' => 'required|exists:branches,id',
                 'quantity' => 'required|integer|min:1',
@@ -211,44 +212,59 @@ class OrdersController extends Controller
                     'result' => $validator->errors()
                 ], 422);
             }
-            $total_price = $request->quantity * $request->price;
-    
+        
+            $total_price = $request->quantity * 20000; // Contoh harga per tabung
+        
+            // 1. Buat order
             $order = Order::create([
                 'user_id' => $user->id,
                 'branch_id' => $request->branch_id,
                 'status' => 'pending',
                 'quantity' => $request->quantity,
-                'total_price' => $request->quantity * 20000, // Contoh harga per tabung
+                'total_price' => $total_price,
                 'pickup_date' => null,
             ]);
-
-            // Midtrans Config
-    \Midtrans\Config::$serverKey = env('MIDTRANS_SERVER_KEY');
-    \Midtrans\Config::$isProduction = false;
-    \Midtrans\Config::$isSanitized = true;
-    \Midtrans\Config::$is3ds = true;
-
-    // Midtrans Params
-    $params = [
-        'transaction_details' => [
-            'order_id' => 'ORDER-' . $order->id,
-            'gross_amount' => $total_price,
-        ],
-        'customer_details' => [
-            'first_name' => $user->name,
-            'email' => $user->email,
-        ],
-    ];
-
-    $snapToken = \Midtrans\Snap::getSnapToken($params);
-    
-    return response()->json([
-        'success' => true,
-        'message' => 'Order placed successfully',
-        'snap_token' => $snapToken,
-        'result' => $order
-    ], 201);
+        
+            // 2. Buat transaksi pending
+            $midtrans_order_id = 'ORDER-' . $order->id;
+        
+            $transaction = Transactions::create([
+                'order_id' => $order->id,
+                'user_id' => $user->id,
+                'payment_method' => 'midtrans',
+                'status' => 'pending',
+                'amount_paid' => $total_price,
+                'midtrans_order_id' => $midtrans_order_id, // Disesuaikan
+            ]);
+        
+            // 3. Midtrans Config
+            \Midtrans\Config::$serverKey = env('MIDTRANS_SERVER_KEY');
+            \Midtrans\Config::$isProduction = false;
+            \Midtrans\Config::$isSanitized = true;
+            \Midtrans\Config::$is3ds = true;
+        
+            // 4. Midtrans Params
+            $params = [
+                'transaction_details' => [
+                    'order_id' => $midtrans_order_id,
+                    'gross_amount' => $total_price,
+                ],
+                'customer_details' => [
+                    'first_name' => $user->name,
+                    'email' => $user->email,
+                ],
+            ];
+        
+            $snapToken = \Midtrans\Snap::getSnapToken($params);
+        
+            return response()->json([
+                'success' => true,
+                'message' => 'Order placed successfully',
+                'snap_token' => $snapToken,
+                'result' => $order
+            ], 201);
         }
+        
     
         // 🔹 User melihat semua pesanan mereka
         public function indexByUser()
